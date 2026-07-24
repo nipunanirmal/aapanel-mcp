@@ -305,6 +305,10 @@ python main.py
 - Update the version compatibility table in this README if you test against a new aaPanel version
 - Don't commit real credentials (servers.yaml is gitignored)
 
+## Developed Using
+
+This project was developed using **GLM 5.2 HIGH** (Zhipu AI) as the coding assistant, with all endpoints tested against a live aaPanel v8.0.4 instance.
+
 ## License
 
 MIT — see [LICENSE](LICENSE)
