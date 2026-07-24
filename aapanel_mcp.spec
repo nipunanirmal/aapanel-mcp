@@ -10,7 +10,7 @@ from pathlib import Path
 
 block_cipher = None
 
-a_sources = ["aapanel_mcp/main.py"]
+a_sources = ["main.py"]
 
 a_binaries = []
 a_datas = [
@@ -33,6 +33,17 @@ a_hiddenimports = [
     "sse_starlette",
     "starlette",
     "uvicorn",
+]
+
+# Include all aapanel_mcp core modules
+a_hiddenimports += [
+    "aapanel_mcp",
+    "aapanel_mcp.server",
+    "aapanel_mcp.client",
+    "aapanel_mcp.config",
+    "aapanel_mcp.safety",
+    "aapanel_mcp.utils",
+    "aapanel_mcp.main",
 ]
 
 # Include all tool modules
