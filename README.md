@@ -28,24 +28,56 @@ Full-featured MCP (Model Context Protocol) server for aaPanel management. Provid
 
 ## Quick Start
 
-### 1. Install dependencies
+### Option A — pip / uvx (recommended for Python users)
 
 ```bash
+pip install aapanel-mcp
+```
+
+Or run instantly without installing:
+
+```bash
+uvx aapanel-mcp
+```
+
+### Option B — Standalone binary (no Python required)
+
+Download the archive for your platform from the [latest release](https://github.com/nipunanirmal/aapanel-mcp/releases/latest):
+
+| Platform | File |
+|----------|------|
+| Linux x64 | `aapanel-mcp-linux-x64.tar.gz` |
+| macOS | `aapanel-mcp-macos.tar.gz` |
+| Windows | `aapanel-mcp-windows.zip` |
+
+Extract and run:
+
+```bash
+# Linux / macOS
+tar -xzf aapanel-mcp-linux-x64.tar.gz
+./aapanel-mcp/aapanel-mcp
+
+# Windows
+Expand-Archive aapanel-mcp-windows.zip
+.\aapanel-mcp\aapanel-mcp.exe
+```
+
+### Option C — From source
+
+```bash
+git clone https://github.com/nipunanirmal/aapanel-mcp.git
 cd aapanel-mcp
 pip install -r requirements.txt
+python main.py
 ```
 
-### 2. Configure servers
+### Configure servers
 
-Copy the example config and fill in your panel details:
+Create `~/.aapanel-mcp/servers.yaml` (or set `AAPANEL_CONFIG_PATH`):
 
 ```bash
-cp config/servers.yaml.example config/servers.yaml
-```
-
-Edit `config/servers.yaml`:
-
-```yaml
+mkdir -p ~/.aapanel-mcp
+cat > ~/.aapanel-mcp/servers.yaml << 'EOF'
 servers:
   - name: "prod-01"
     host: "http://192.168.1.100:8888"
@@ -55,6 +87,7 @@ servers:
 
 global:
   default_server: "prod-01"
+EOF
 ```
 
 **To get your API token:**
@@ -63,65 +96,54 @@ global:
 3. Enable API interface
 4. Copy the API token
 
-### 3. Run the server
+### Configure in MCP clients
 
-```bash
-python main.py
-```
-
-### 4. Configure in Windsurf
-
-Add to your Windsurf MCP settings:
+**Windsurf** — add to MCP settings:
 
 ```json
 {
   "mcpServers": {
     "aapanel": {
-      "command": "python",
-      "args": ["/path/to/aapanel-mcp/main.py"],
+      "command": "aapanel-mcp",
       "env": {
-        "AAPANEL_CONFIG_PATH": "/path/to/aapanel-mcp/config/servers.yaml"
+        "AAPANEL_CONFIG_PATH": "/path/to/servers.yaml"
       }
     }
   }
 }
 ```
 
-### 5. Configure in Cursor
-
-Add to `~/.cursor/mcp.json`:
+**Cursor** — add to `~/.cursor/mcp.json`:
 
 ```json
 {
   "mcpServers": {
     "aapanel": {
-      "command": "python",
-      "args": ["/path/to/aapanel-mcp/main.py"],
+      "command": "aapanel-mcp",
       "env": {
-        "AAPANEL_CONFIG_PATH": "/path/to/aapanel-mcp/config/servers.yaml"
+        "AAPANEL_CONFIG_PATH": "/path/to/servers.yaml"
       }
     }
   }
 }
 ```
 
-### 6. Configure in Claude Desktop
-
-Add to Claude Desktop config (`claude_desktop_config.json`):
+**Claude Desktop** — add to `claude_desktop_config.json`:
 
 ```json
 {
   "mcpServers": {
     "aapanel": {
-      "command": "python",
-      "args": ["/path/to/aapanel-mcp/main.py"],
+      "command": "aapanel-mcp",
       "env": {
-        "AAPANEL_CONFIG_PATH": "/path/to/aapanel-mcp/config/servers.yaml"
+        "AAPANEL_CONFIG_PATH": "/path/to/servers.yaml"
       }
     }
   }
 }
 ```
+
+> **Using the standalone binary?** Replace `"command": "aapanel-mcp"` with the path to the extracted binary, e.g. `"command": "/path/to/aapanel-mcp/aapanel-mcp"`.
 
 ## Optional aaPanel Terminal Bridge
 
@@ -304,6 +326,14 @@ pip install -r requirements.txt
 cp config/servers.yaml.example config/servers.yaml
 # Edit servers.yaml with your panel details
 python main.py
+```
+
+### Building Standalone Binaries
+
+```bash
+pip install pyinstaller
+pyinstaller aapanel_mcp.spec
+# Binary is in dist/aapanel-mcp/aapanel-mcp
 ```
 
 ### Guidelines

@@ -9,15 +9,98 @@ permissions:
   contents: write
 
 jobs:
-  release:
+  # ── Plugin ZIP (always Ubuntu) ──────────────────────────────────────────
+  plugin-zip:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - name: Package aaPanel Terminal Bridge
         working-directory: plugin/mcp_terminal
         run: zip -r ../../mcp_terminal.zip .
-      - name: Publish release
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mcp-terminal-zip
+          path: mcp_terminal.zip
+
+  # ── PyInstaller binaries (matrix on 3 OS) ───────────────────────────────
+  binaries:
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            artifact: aapanel-mcp-linux-x64
+            archive: tar.gz
+          - os: macos-latest
+            artifact: aapanel-mcp-macos
+            archive: tar.gz
+          - os: windows-latest
+            artifact: aapanel-mcp-windows
+            archive: zip
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
+      - name: Build binary (Unix)
+        if: matrix.os != 'windows-latest'
+        run: pyinstaller aapanel_mcp.spec
+      - name: Build binary (Windows)
+        if: matrix.os == 'windows-latest'
+        run: pyinstaller aapanel_mcp.spec
+        shell: cmd
+      - name: Archive (Unix)
+        if: matrix.os != 'windows-latest'
+        run: tar -czf ${{ matrix.artifact }}.tar.gz -C dist aapanel-mcp
+      - name: Archive (Windows)
+        if: matrix.os == 'windows-latest'
+        run: Compress-Archive -Path dist/aapanel-mcp -DestinationPath ${{ matrix.artifact }}.zip
+        shell: pwsh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: ${{ matrix.artifact }}.${{ matrix.archive }}
+
+  # ── PyPI package ─────────────────────────────────────────────────────────
+  pypi:
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/p/aapanel-mcp
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install build tools
+        run: pip install build twine
+      - name: Build sdist + wheel
+        run: python -m build
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+
+  # ── Collect everything into the GitHub Release ───────────────────────────
+  publish-release:
+    needs: [plugin-zip, binaries, pypi]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+      - name: Flatten artifacts
+        run: |
+          mkdir -p release-assets
+          find artifacts -type f \( -name "*.tar.gz" -o -name "*.zip" \) -exec cp {} release-assets/ \;
+      - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           generate_release_notes: true
-          files: mcp_terminal.zip
+          files: release-assets/*

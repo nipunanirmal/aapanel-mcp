@@ -4,16 +4,37 @@ build-backend = "setuptools.backends._legacy:_Backend"
 
 [project]
 name = "aapanel-mcp"
-version = "1.1.0"
+version = "1.2.0"
 description = "Full-featured MCP server for aaPanel management"
 readme = "README.md"
 license = {text = "MIT"}
 requires-python = ">=3.10"
+authors = [
+    {name = "Nipuna Nirmal"},
+]
+keywords = ["aapanel", "mcp", "model-context-protocol", "server-management", "cli"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: System Administrators",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: System :: Systems Administration",
+]
 dependencies = [
     "mcp>=0.9.0",
     "httpx>=0.27.0",
     "pyyaml>=6.0",
 ]
+
+[project.urls]
+Homepage = "https://github.com/nipunanirmal/aapanel-mcp"
+Repository = "https://github.com/nipunanirmal/aapanel-mcp"
+Issues = "https://github.com/nipunanirmal/aapanel-mcp/issues"
 
 [project.scripts]
 aapanel-mcp = "aapanel_mcp.main:main"
@@ -21,3 +42,6 @@ aapanel-mcp = "aapanel_mcp.main:main"
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["aapanel_mcp*"]
+
+[tool.setuptools.package-data]
+aapanel_mcp = ["*.yaml", "*.yml"]
