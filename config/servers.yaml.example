@@ -1,0 +1,14 @@
+# Servers configuration for aaPanel MCP
+# Copy this file to servers.yaml and fill in your panel details
+
+servers:
+  - name: "default"
+    host: "http://127.0.0.1:8888"
+    token: "YOUR_API_TOKEN"
+    verify_ssl: false
+    timeout: 30
+
+# Global settings
+global:
+  # Default server name to use when no server is specified
+  default_server: "default"
