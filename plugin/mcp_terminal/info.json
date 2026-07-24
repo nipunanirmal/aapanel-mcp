@@ -1,0 +1,9 @@
+{
+  "title": "MCP Terminal Bridge",
+  "name": "mcp_terminal",
+  "ps": "Authenticated aaPanel Terminal bridge for MCP",
+  "versions": "1.1",
+  "checks": "/www/server/panel/plugin/mcp_terminal/mcp_terminal_main.py",
+  "author": "aaPanel MCP",
+  "not_substituted": []
+}

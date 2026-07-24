@@ -20,6 +20,7 @@ from .tools.docker import register_docker_tools
 from .tools.projects import register_project_tools
 from .tools.logs import register_log_tools
 from .tools.ssh import register_ssh_tools
+from .tools.terminal import register_terminal_tools
 from .tools.backup import register_backup_tools
 from .tools.monitoring import register_monitoring_tools
 from .tools.deployment import register_deployment_tools
@@ -55,6 +56,7 @@ def create_server() -> FastMCP:
     register_project_tools(mcp)
     register_log_tools(mcp)
     register_ssh_tools(mcp)
+    register_terminal_tools(mcp)
     register_backup_tools(mcp)
     register_monitoring_tools(mcp)
     register_deployment_tools(mcp)

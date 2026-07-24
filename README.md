@@ -123,6 +123,14 @@ Add to Claude Desktop config (`claude_desktop_config.json`):
 }
 ```
 
+## Optional aaPanel Terminal Bridge
+
+`terminal_execute_command` needs the optional **aaPanel Terminal Bridge** plugin only when you want MCP to run commands through aaPanel hosts saved in Terminal. aaPanel Terminal normally uses an authenticated browser WebSocket; an MCP client uses the aaPanel API token instead. The bridge runs inside aaPanel, validates the existing API-token signature, and reuses only hosts already saved in aaPanel Terminal.
+
+The MCP server never installs this plugin on your computer or on an aaPanel server by default. Use `terminal_bridge_status` to inspect the state. If it is missing, `terminal_install_bridge` first explains why it is needed and shows the GitHub Release download URL. It downloads and imports the release ZIP only after you call it again with `confirmed=true`.
+
+Release asset: `mcp_terminal.zip`
+
 ## Tool Categories
 
 | Category | Tools | Description |

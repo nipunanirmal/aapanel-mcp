@@ -141,6 +141,58 @@ class aaPanelClient:
             "error_type": type(last_error).__name__ if last_error else "Unknown",
         }
 
+    def install_plugin_from_release(
+        self,
+        plugin_name: str,
+        release_url: str,
+        confirmed: bool = False,
+    ) -> dict:
+        if not confirmed:
+            return {
+                "status": False,
+                "confirmation_required": True,
+                "msg": "Confirmation is required before downloading and installing a third-party aaPanel plugin.",
+            }
+
+        try:
+            with httpx.Client(
+                timeout=self._client.timeout,
+                verify=self.config.verify_ssl,
+                follow_redirects=True,
+            ) as session:
+                archive_response = session.get(release_url)
+                archive_response.raise_for_status()
+                upload_response = session.post(
+                    f"{self.config.host}/plugin?action=update_zip",
+                    data=sign_request(self.config.token),
+                    files={
+                        "plugin_zip": (
+                            f"{plugin_name}.zip",
+                            archive_response.content,
+                            "application/zip",
+                        )
+                    },
+                )
+                upload_response.raise_for_status()
+                upload_data = upload_response.json()
+                payload = upload_data.get("data", upload_data) if isinstance(upload_data, dict) else {}
+                if not isinstance(payload, dict) or not payload.get("tmp_path") or payload.get("name") != plugin_name:
+                    return {"status": False, "msg": "aaPanel rejected the plugin archive", "response": upload_data}
+
+                install_response = session.post(
+                    f"{self.config.host}/plugin?action=input_zip",
+                    data=sign_request(
+                        self.config.token,
+                        {"tmp_path": payload["tmp_path"], "plugin_name": plugin_name},
+                    ),
+                )
+                install_response.raise_for_status()
+                return install_response.json()
+        except httpx.HTTPError as exc:
+            return {"status": False, "msg": f"Plugin installation request failed: {exc}"}
+        except ValueError as exc:
+            return {"status": False, "msg": f"Invalid plugin installation response: {exc}"}
+
     def health_check(self) -> bool:
         """Check if the panel is reachable."""
         try:
