@@ -14,7 +14,7 @@ class ServerConfig:
     host: str
     token: str
     verify_ssl: bool = False
-    timeout: int = 30
+    timeout: int = 15
 
     def __post_init__(self):
         self.host = self.host.rstrip("/")

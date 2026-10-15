@@ -45,17 +45,18 @@ def register_ftp_tools(mcp: FastMCP) -> None:
         return format_response(data)
 
     @mcp.tool()
-    def ftp_delete(server: str = "", id: str = "", username: str = "") -> str:
+    def ftp_delete(server: str = "", id: str = "", username: str = "", confirmed: bool = False) -> str:
         """Delete an FTP user.
 
         Args:
             server: Server name (optional)
             id: FTP user ID
             username: FTP username
+            confirmed: Must be True to confirm this destructive action
         """
         client = client_manager.get_client(server or None)
         params = {"id": id, "username": username}
-        data = client.request("/ftp?action=DeleteUser", params)
+        data = client.request("/ftp?action=DeleteUser", params, confirmed=confirmed)
         return format_response(data)
 
     @mcp.tool()
@@ -74,7 +75,7 @@ def register_ftp_tools(mcp: FastMCP) -> None:
             password: New password
         """
         client = client_manager.get_client(server or None)
-        params = {"id": id, "username": username, "password": password}
+        params = {"id": id, "ftp_username": username, "username": username, "new_password": password, "password": password}
         data = client.request("/ftp?action=SetUserPassword", params)
         return format_response(data)
 

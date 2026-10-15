@@ -86,36 +86,39 @@ def register_system_tools(mcp: FastMCP) -> None:
         return format_response(data)
 
     @mcp.tool()
-    def system_restart_server(server: str = "") -> str:
+    def system_restart_server(server: str = "", confirmed: bool = False) -> str:
         """Restart the server. Use with caution!
 
         Args:
             server: Server name (optional, uses default if not specified)
+            confirmed: Must be True to confirm this destructive action
         """
         client = client_manager.get_client(server or None)
-        data = client.request("/system?action=RestartServer")
+        data = client.request("/system?action=RestartServer", confirmed=confirmed)
         return format_response(data)
 
     @mcp.tool()
-    def system_restart_panel(server: str = "") -> str:
+    def system_restart_panel(server: str = "", confirmed: bool = False) -> str:
         """Restart the aaPanel service.
 
         Args:
             server: Server name (optional, uses default if not specified)
+            confirmed: Must be True to confirm this action
         """
         client = client_manager.get_client(server or None)
-        data = client.request("/system?action=RepPanel")
+        data = client.request("/system?action=RepPanel", confirmed=confirmed)
         return format_response(data)
 
     @mcp.tool()
-    def system_clear_cache(server: str = "") -> str:
+    def system_clear_cache(server: str = "", confirmed: bool = False) -> str:
         """Clear system cache to free up memory.
 
         Args:
             server: Server name (optional, uses default if not specified)
+            confirmed: Must be True to confirm this destructive action
         """
         client = client_manager.get_client(server or None)
-        data = client.request("/system?action=ClearSystem")
+        data = client.request("/system?action=ClearSystem", confirmed=confirmed)
         return format_response(data)
 
     @mcp.tool()
@@ -132,7 +135,7 @@ def register_system_tools(mcp: FastMCP) -> None:
             act: Action (start, stop, restart, reload)
         """
         client = client_manager.get_client(server or None)
-        params = {"name": service, "act": act}
+        params = {"name": service, "type": act, "act": act}
         data = client.request("/system?action=ServiceAdmin", params)
         return format_response(data)
 

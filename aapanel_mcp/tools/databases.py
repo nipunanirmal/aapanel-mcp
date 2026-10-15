@@ -44,26 +44,33 @@ def register_database_tools(mcp: FastMCP) -> None:
         client = client_manager.get_client(server or None)
         params = {
             "name": name,
-            "db_user": username,
+            "db_user": username or name,
             "password": password,
-            "ps": ps,
+            "ps": ps or name,
+            "address": access,
+            "dataAccess": access,
             "access": access,
+            "codeing": "utf8mb4",
+            "dtype": "MySQL",
+            "sid": "0",
+            "active": "false",
         }
         data = client.request("/database?action=AddDatabase", params)
         return format_response(data)
 
     @mcp.tool()
-    def database_delete(server: str = "", id: str = "", name: str = "") -> str:
+    def database_delete(server: str = "", id: str = "", name: str = "", confirmed: bool = False) -> str:
         """Delete a database.
 
         Args:
             server: Server name (optional)
             id: Database ID
             name: Database name
+            confirmed: Must be True to confirm this destructive action
         """
         client = client_manager.get_client(server or None)
         params = {"id": id, "name": name}
-        data = client.request("/database?action=DeleteDatabase", params)
+        data = client.request("/database?action=DeleteDatabase", params, confirmed=confirmed)
         return format_response(data)
 
     @mcp.tool()
@@ -108,21 +115,22 @@ def register_database_tools(mcp: FastMCP) -> None:
             id: Database ID
         """
         client = client_manager.get_client(server or None)
-        params = {"table": "backup", "p": 1, "limit": 100, "search": id}
+        params = {"table": "backup", "type": "1", "p": 1, "limit": 100, "search": id}
         data = client.request("/data?action=getData", params)
         return format_response(data)
 
     @mcp.tool()
-    def database_delete_backup(server: str = "", id: str = "") -> str:
+    def database_delete_backup(server: str = "", id: str = "", confirmed: bool = False) -> str:
         """Delete a database backup.
 
         Args:
             server: Server name (optional)
             id: Backup ID
+            confirmed: Must be True to confirm this destructive action
         """
         client = client_manager.get_client(server or None)
         params = {"id": id}
-        data = client.request("/database?action=DelBackup", params)
+        data = client.request("/database?action=DelBackup", params, confirmed=confirmed)
         return format_response(data)
 
     @mcp.tool()

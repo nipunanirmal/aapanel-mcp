@@ -2,7 +2,7 @@
 
 from mcp.server.fastmcp import FastMCP
 from ..client import client_manager
-from ..utils import format_response
+from ..utils import format_response, request_compat
 
 
 def register_config_tools(mcp: FastMCP) -> None:
@@ -29,7 +29,7 @@ def register_config_tools(mcp: FastMCP) -> None:
             password2: Confirm new password
         """
         client = client_manager.get_client(server or None)
-        params = {"password1": password1, "password2": password2}
+        params = {"password1": password1, "password2": password2 or password1}
         data = client.request("/config?action=setPassword", params)
         return format_response(data)
 
@@ -42,7 +42,7 @@ def register_config_tools(mcp: FastMCP) -> None:
             username: New username
         """
         client = client_manager.get_client(server or None)
-        params = {"username": username}
+        params = {"username1": username, "username2": username, "username": username}
         data = client.request("/config?action=setUsername", params)
         return format_response(data)
 
@@ -54,7 +54,10 @@ def register_config_tools(mcp: FastMCP) -> None:
             server: Server name (optional)
         """
         client = client_manager.get_client(server or None)
-        data = client.request("/ssl?action=GetPanelSSL")
+        data = request_compat(
+            client,
+            ["/config?action=GetPanelSSL", "/ssl?action=GetPanelSSL"],
+        )
         return format_response(data)
 
     @mcp.tool()
@@ -71,8 +74,12 @@ def register_config_tools(mcp: FastMCP) -> None:
             csr: Certificate content
         """
         client = client_manager.get_client(server or None)
-        params = {"key": key, "csr": csr}
-        data = client.request("/ssl?action=SavePanelSSL", params)
+        params = {"privateKey": key, "certPem": csr, "key": key, "csr": csr}
+        data = request_compat(
+            client,
+            ["/config?action=SavePanelSSL", "/ssl?action=SavePanelSSL"],
+            params,
+        )
         return format_response(data)
 
     @mcp.tool()
@@ -104,7 +111,9 @@ def register_config_tools(mcp: FastMCP) -> None:
             basic_pwd: Basic auth password
         """
         client = client_manager.get_client(server or None)
+        is_open = "True" if str(open_basic_auth).lower() in ("1", "true") else "False"
         params = {
+            "open": is_open,
             "open_basic_auth": open_basic_auth,
             "basic_user": basic_user,
             "basic_pwd": basic_pwd,
@@ -137,14 +146,15 @@ def register_config_tools(mcp: FastMCP) -> None:
         return format_response(data)
 
     @mcp.tool()
-    def config_close_panel(server: str = "") -> str:
+    def config_close_panel(server: str = "", confirmed: bool = False) -> str:
         """Close/disable the panel.
 
         Args:
             server: Server name (optional)
+            confirmed: Must be True to confirm this destructive action
         """
         client = client_manager.get_client(server or None)
-        data = client.request("/config?action=ClosePanel")
+        data = client.request("/config?action=ClosePanel", confirmed=confirmed)
         return format_response(data)
 
     @mcp.tool()
@@ -157,22 +167,29 @@ def register_config_tools(mcp: FastMCP) -> None:
             limit: Items per page (default 20)
         """
         client = client_manager.get_client(server or None)
-        params = {"page": page, "limit": limit}
+        params = {"p": page, "page": page, "limit": limit}
         data = client.request("/config?action=get_login_log", params)
         return format_response(data)
 
     @mcp.tool()
-    def config_set_ip_whitelist(server: str = "", ips: str = "") -> str:
-        """Set IP whitelist for panel access.
+    def config_set_ip_whitelist(server: str = "", ips: str = "", action: str = "add") -> str:
+        """Set or query IP whitelist for panel login notifications.
 
         Args:
             server: Server name (optional)
-            ips: IP addresses, one per line or comma-separated
+            ips: IP address(es), comma or newline-separated (empty to list current whitelist)
+            action: Operation type (get, add, del, clear)
         """
         client = client_manager.get_client(server or None)
-        params = {"ips": ips}
-        data = client.request("/config?action=login_ipwhite", params)
-        return format_response(data)
+        if not ips and action == "add":
+            action = "get"
+        if action in ("get", "clear"):
+            return format_response(client.request("/config?action=login_ipwhite", {"type": action}))
+        ip_list = [ip.strip() for ip in ips.replace(",", "\n").splitlines() if ip.strip()]
+        results = []
+        for ip in ip_list:
+            results.append(client.request("/config?action=login_ipwhite", {"type": action, "ip": ip}))
+        return format_response(results[0] if len(results) == 1 else results)
 
     @mcp.tool()
     def config_get_api_config(server: str = "") -> str:
@@ -195,10 +212,11 @@ def register_config_tools(mcp: FastMCP) -> None:
 
         Args:
             server: Server name (optional)
-            token: New API token (empty to auto-generate)
+            token: Action type ('1'=regenerate token, '2'=toggle API, '3'=set IP limits) or empty
             limit_ip: IP addresses allowed to use API (one per line)
         """
         client = client_manager.get_client(server or None)
-        params = {"token": token, "limit_ip": limit_ip}
+        t_type = token if token in ("1", "2", "3") else ("3" if limit_ip else "1")
+        params = {"t_type": t_type, "token": token, "limit_addr": limit_ip, "limit_ip": limit_ip}
         data = client.request("/config?action=set_token", params)
         return format_response(data)

@@ -1,22 +1,38 @@
 # aaPanel MCP Server
 
-Full-featured MCP (Model Context Protocol) server for aaPanel management. Provides **278 tools** across 19 modules covering all major aaPanel functionality: system, sites, databases, FTP, files, firewall, crontab, SSL, config, plugins, Docker, projects, logs, SSH, backups, monitoring, deployment, **system optimization** (RAM cleanup, CPU tuning, storage management, WAF, PHP/Nginx/Apache optimization), and **security** (network scan, website statistics, tamper proof, system hardening, virus scan, CVE scanning, anti-theft).
+Full-featured MCP (Model Context Protocol) server for aaPanel management. Provides **282 tools** across 19 modules covering all major aaPanel functionality: system, sites, databases, FTP, files, firewall, crontab, SSL, config, plugins, Docker, projects, logs, SSH, backups, monitoring, deployment, **system optimization** (RAM cleanup, CPU tuning, storage management, WAF, PHP/Nginx/Apache optimization), and **security** (network scan, website statistics, tamper proof, system hardening, virus scan, CVE scanning, anti-theft).
 
 ## aaPanel Version Compatibility
 
-**Tested against aaPanel v8.0.4** (Ubuntu 24.04, Nginx 1.30, MySQL 8.0, PHP 8.3)
+**Tested against aaPanel v8.0.7** (Ubuntu 24.04, Nginx 1.30, MySQL 8.0, PHP 8.3)
 
 > **Important:** aaPanel API endpoints may change between panel versions. If you encounter 404 errors or unexpected responses after updating aaPanel, the endpoint mappings in `aapanel_mcp/tools/*.py` may need to be updated. See [Contributing](#contributing) for details on how to fix endpoints.
 
 | aaPanel Version | Status | Notes |
 |----------------|--------|-------|
+| 8.0.7 | ✅ Tested | All endpoints verified October 2026 |
 | 8.0.4 | ✅ Tested | All endpoints verified July 2026 |
-| 8.x | ⚠️ Likely works | Report issues if endpoints change |
+| 8.x | ⚠️ Likely works | Version-drift endpoints auto-fall back to legacy routes |
 | 7.x | ❓ Untested | May require endpoint updates |
+
+**Backward compatibility:** tools that use v8.0.7-only routes (e.g. `/v2/btdocker/*`, `/v2/ssl_domain`, `/v2/safe/*`, `/v2/site_monitor`, `/warning`) automatically fall back to the equivalent legacy v1 endpoint when the panel reports the route as missing. Both new and old panels are supported by the same tool surface.
+
+### Optional module dependencies
+
+Some tools depend on optional aaPanel plugins or modules that may not be installed on your panel. They return a clear error (not a crash) when the module is absent:
+
+| Tools | Requires |
+|-------|----------|
+| `waf_*` | btwaf (Web Application Firewall) plugin |
+| `docker_*` | Docker runtime on the panel host |
+| `service_get_memcached_status` | Memcached installed |
+| `service_get_redis_status` | Redis installed |
+| `virus_scan_web`, `virus_scan_get_web_result` | webbasicscanning module |
+| `terminal_execute_command` | aaPanel Terminal Bridge plugin (see below) |
 
 ## Features
 
-- **278 MCP tools** across 19 modules
+- **282 MCP tools** across 19 modules
 - **Multi-server support** — manage multiple aaPanel instances from one MCP server
 - **Full API coverage** — websites, databases, FTP, files, firewall, cron, SSL, Docker, projects, and more
 - **System optimization** — RAM cleanup, CPU tuning, storage management, WAF, security baseline scanning, PHP/Nginx/Apache config optimization
@@ -158,14 +174,14 @@ Release asset: `mcp_terminal.zip`
 | Category | Tools | Description |
 |----------|-------|-------------|
 | System | 12 | CPU, memory, disk, network, service management |
-| Sites | 20 | Create, delete, SSL, redirect, proxy, domains, backups |
+| Sites | 19 | Create, delete, SSL, redirect, proxy, domains, backups |
 | Databases | 12 | MySQL/PostgreSQL databases, backups, logs |
 | FTP | 5 | FTP user management |
 | Files | 15 | File operations (read, write, mkdir, compress, etc.) |
 | Firewall | 8 | Port and IP rules, panel port |
 | Crontab | 7 | Cron job management |
 | SSL | 8 | Certificate management, Let's Encrypt |
-| Panel Config | 15 | Panel settings, users, auth, API config |
+| Panel Config | 14 | Panel settings, users, auth, API config |
 | Plugins | 8 | Software/plugin install, configure |
 | Docker | 10 | Container, image, network, volume management |
 | Projects | 8 | Java/Node/Go/Python/.NET/Proxy/HTML projects |
@@ -174,8 +190,8 @@ Release asset: `mcp_terminal.zip`
 | Backup/Tasks | 6 | Backup management, background tasks |
 | Monitoring | 5 | Real-time and historical monitoring |
 | Deployment | 3 | One-click deployment packages |
-| Optimization | 68 | RAM cleanup, CPU tuning, storage mgmt, WAF, security baseline, PHP/Nginx/Apache config, process mgmt, abnormal detection, software install |
-| Security | 62 | Network scan, website stats, tamper proof, system hardening (SSH/2FA/IP whitelist), virus/malware scan, CVE scan, anti-theft, traffic limiting, alerts, operation logs |
+| Optimization | 67 | RAM cleanup, CPU tuning, storage mgmt, WAF, security baseline, PHP/Nginx/Apache config, process mgmt, abnormal detection, software install |
+| Security | 59 | Network scan, website stats, tamper proof, system hardening (SSH/2FA/IP whitelist), virus/malware scan, CVE scan, anti-theft, traffic limiting, alerts, operation logs |
 
 ## Safety Rules
 
@@ -270,14 +286,14 @@ aapanel-mcp/
     │   └── __init__.py         # Utility functions (format_response)
     └── tools/
         ├── system.py           # System tools (12)
-        ├── sites.py            # Site tools (20)
+        ├── sites.py            # Site tools (19)
         ├── databases.py        # Database tools (12)
         ├── ftp.py              # FTP tools (5)
         ├── files.py            # File tools (15)
         ├── firewall.py         # Firewall tools (8)
         ├── crontab.py          # Crontab tools (7)
         ├── ssl.py              # SSL tools (8)
-        ├── panel_config.py     # Config tools (15)
+        ├── panel_config.py     # Config tools (14)
         ├── plugins.py          # Plugin tools (8)
         ├── docker.py           # Docker tools (10)
         ├── projects.py         # Project tools (8)
@@ -286,8 +302,8 @@ aapanel-mcp/
         ├── backup.py           # Backup/task tools (6)
         ├── monitoring.py       # Monitoring tools (5)
         ├── deployment.py       # Deployment tools (3)
-        ├── optimization.py     # Optimization tools (68)
-        └── security.py         # Security tools (62)
+        ├── optimization.py     # Optimization tools (67)
+        └── security.py         # Security tools (59)
 ```
 
 ## Contributing
@@ -345,7 +361,7 @@ pyinstaller aapanel_mcp.spec
 
 ## Developed Using
 
-This project was developed using **GLM 5.2 HIGH** (Zhipu AI) as the coding assistant, with all endpoints tested against a live aaPanel v8.0.4 instance.
+This project was developed using **GLM 5.2 HIGH** (Zhipu AI) as the coding assistant, with all endpoints tested against a live aaPanel v8.0.4 instance. The v8.0.7 compatibility audit and endpoint fixes were performed with **Devin** (Cognition AI).
 
 ## License
 

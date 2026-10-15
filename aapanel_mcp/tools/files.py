@@ -1,5 +1,6 @@
 """File manager tools for aaPanel MCP server."""
 
+import base64
 from mcp.server.fastmcp import FastMCP
 from ..client import client_manager
 from ..utils import format_response
@@ -70,16 +71,17 @@ def register_file_tools(mcp: FastMCP) -> None:
         return format_response(data)
 
     @mcp.tool()
-    def file_delete(server: str = "", path: str = "") -> str:
+    def file_delete(server: str = "", path: str = "", confirmed: bool = False) -> str:
         """Delete a file or directory on the server.
 
         Args:
             server: Server name (optional)
             path: Path to delete
+            confirmed: Must be True to confirm this destructive action
         """
         client = client_manager.get_client(server or None)
         params = {"path": path}
-        data = client.request("/files?action=DeleteFile", params)
+        data = client.request("/files?action=DeleteFile", params, confirmed=confirmed)
         return format_response(data)
 
     @mcp.tool()
@@ -92,7 +94,7 @@ def register_file_tools(mcp: FastMCP) -> None:
             dpath: Destination path
         """
         client = client_manager.get_client(server or None)
-        params = {"sfile": sfile, "dpath": dpath}
+        params = {"sfile": sfile, "dfile": dpath, "dpath": dpath}
         data = client.request("/files?action=MvFile", params)
         return format_response(data)
 
@@ -106,7 +108,7 @@ def register_file_tools(mcp: FastMCP) -> None:
             dpath: Destination path
         """
         client = client_manager.get_client(server or None)
-        params = {"sfile": sfile, "dpath": dpath}
+        params = {"sfile": sfile, "dfile": dpath, "dpath": dpath}
         data = client.request("/files?action=CopyFile", params)
         return format_response(data)
 
@@ -125,8 +127,19 @@ def register_file_tools(mcp: FastMCP) -> None:
             dpath: Output archive path
             type: Archive type (zip or tar.gz)
         """
+        import posixpath
         client = client_manager.get_client(server or None)
-        params = {"sfile": sfile, "dpath": dpath, "type": type}
+        norm_sfile = sfile.rstrip("/") if sfile != "/" else "/"
+        parent_dir = posixpath.dirname(norm_sfile) or "/"
+        base_name = posixpath.basename(norm_sfile) or sfile
+        params = {
+            "path": parent_dir,
+            "sfile": base_name,
+            "dfile": dpath,
+            "dpath": dpath,
+            "z_type": type,
+            "type": type,
+        }
         data = client.request("/files?action=Zip", params)
         return format_response(data)
 
@@ -146,21 +159,32 @@ def register_file_tools(mcp: FastMCP) -> None:
             type: Archive type (zip or tar.gz)
         """
         client = client_manager.get_client(server or None)
-        params = {"sfile": sfile, "dpath": dpath, "type": type}
+        params = {"sfile": sfile, "dfile": dpath, "dpath": dpath, "type": type, "password": ""}
         data = client.request("/files?action=UnZip", params)
         return format_response(data)
 
     @mcp.tool()
-    def file_download(server: str = "", url: str = "", path: str = "") -> str:
+    def file_download(server: str = "", url: str = "", path: str = "", filename: str = "") -> str:
         """Download a file from a URL to the server.
 
         Args:
             server: Server name (optional)
             url: URL to download from
-            path: Destination path on the server
+            path: Destination directory or file path on the server
+            filename: Optional filename (extracted from URL or path if omitted)
         """
+        import posixpath
         client = client_manager.get_client(server or None)
-        params = {"url": url, "path": path}
+        fname = filename
+        dest_dir = path
+        if not fname:
+            url_base = posixpath.basename(url.split("?")[0].rstrip("/"))
+            if path and not path.endswith("/") and "." in posixpath.basename(path):
+                fname = posixpath.basename(path)
+                dest_dir = posixpath.dirname(path) or "/"
+            else:
+                fname = url_base or "downloaded_file"
+        params = {"url": url, "path": dest_dir, "filename": fname}
         data = client.request("/files?action=DownloadFile", params)
         return format_response(data)
 
@@ -173,7 +197,7 @@ def register_file_tools(mcp: FastMCP) -> None:
             path: File or directory path
         """
         client = client_manager.get_client(server or None)
-        params = {"path": path}
+        params = {"filename": path, "path": path}
         data = client.request("/files?action=GetFileAccess", params)
         return format_response(data)
 
@@ -182,7 +206,7 @@ def register_file_tools(mcp: FastMCP) -> None:
         server: str = "",
         path: str = "",
         mode: str = "755",
-        user: str = "",
+        user: str = "www",
     ) -> str:
         """Change file permissions and optionally owner.
 
@@ -190,10 +214,10 @@ def register_file_tools(mcp: FastMCP) -> None:
             server: Server name (optional)
             path: File or directory path
             mode: Permission mode (e.g. 755, 644)
-            user: New owner (optional)
+            user: New owner (default www)
         """
         client = client_manager.get_client(server or None)
-        params = {"path": path, "mode": mode, "user": user}
+        params = {"filename": path, "path": path, "access": mode, "mode": mode, "user": user or "www", "all": "True"}
         data = client.request("/files?action=SetFileAccess", params)
         return format_response(data)
 
@@ -248,6 +272,15 @@ def register_file_tools(mcp: FastMCP) -> None:
             content: Base64-encoded file content
         """
         client = client_manager.get_client(server or None)
-        params = {"path": path, "filename": filename, "content": content}
-        data = client.request("/files?action=UploadFile", params)
+        try:
+            file_bytes = base64.b64decode(content)
+        except Exception as e:
+            return f"Error: Invalid base64 content: {e}"
+        params = {"path": path, "filename": filename}
+        data = client.request_upload(
+            "/files?action=UploadFile",
+            params=params,
+            filename=filename,
+            file_content=file_bytes,
+        )
         return format_response(data)

@@ -2,7 +2,7 @@
 
 from mcp.server.fastmcp import FastMCP
 from ..client import client_manager
-from ..utils import format_response
+from ..utils import format_response, request_compat
 
 
 def register_deployment_tools(mcp: FastMCP) -> None:
@@ -22,8 +22,12 @@ def register_deployment_tools(mcp: FastMCP) -> None:
             limit: Items per page (default 20)
         """
         client = client_manager.get_client(server or None)
-        params = {"name": "deployment", "fun": "get_list", "p": page, "limit": limit}
-        data = client.request("/plugin?action=a", params)
+        params = {"p": page, "limit": limit}
+        data = request_compat(
+            client,
+            ["/v2/deployment?action=GetList", "/deployment?action=GetList"],
+            params,
+        )
         return format_response(data)
 
     @mcp.tool()
@@ -37,12 +41,18 @@ def register_deployment_tools(mcp: FastMCP) -> None:
 
         Args:
             server: Server name (optional)
-            id: Deployment package ID
+            id: Deployment package name or ID (e.g. WordPress, Drupal, Laravel)
             siteName: Target site domain name
             phpVersion: PHP version to use
         """
         client = client_manager.get_client(server or None)
-        params = {"id": id, "siteName": siteName, "php_version": phpVersion}
+        params = {
+            "dname": id,
+            "id": id,
+            "site_name": siteName,
+            "siteName": siteName,
+            "php_version": phpVersion,
+        }
         data = client.request("/deployment?action=SetupPackage", params)
         return format_response(data)
 

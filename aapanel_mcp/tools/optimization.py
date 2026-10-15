@@ -4,9 +4,11 @@ Covers: system cleanup, RAM release, CPU optimization, storage management,
 log deletion, process management, WAF management, and performance tuning.
 """
 
+import json
+import time
 from mcp.server.fastmcp import FastMCP
 from ..client import client_manager
-from ..utils import format_response
+from ..utils import format_response, request_compat, is_missing_endpoint
 
 
 def register_optimization_tools(mcp: FastMCP) -> None:
@@ -15,73 +17,79 @@ def register_optimization_tools(mcp: FastMCP) -> None:
     # ==================== System Cleanup ====================
 
     @mcp.tool()
-    def system_clear_all_cache(server: str = "") -> str:
+    def system_clear_all_cache(server: str = "", confirmed: bool = False) -> str:
         """Clear all system garbage: mail logs, temp files, install cache, wwwlogs.
         Returns count of files cleaned and total space freed.
 
         Args:
             server: Server name (optional)
+            confirmed: Must be True to confirm this destructive action
         """
         client = client_manager.get_client(server or None)
-        data = client.request("/system?action=ClearSystem")
+        data = client.request("/system?action=ClearSystem", confirmed=confirmed)
         return format_response(data)
 
     @mcp.tool()
-    def system_release_memory(server: str = "") -> str:
+    def system_release_memory(server: str = "", confirmed: bool = False) -> str:
         """Release/flush system memory (RAM cleanup). Runs sync and memory release script.
         Returns updated memory info after release.
 
         Args:
             server: Server name (optional)
+            confirmed: Must be True to confirm this action
         """
         client = client_manager.get_client(server or None)
-        data = client.request("/system?action=ReMemory")
+        data = client.request("/system?action=ReMemory", confirmed=confirmed)
         return format_response(data)
 
     @mcp.tool()
-    def system_clear_panel_logs(server: str = "") -> str:
+    def system_clear_panel_logs(server: str = "", confirmed: bool = False) -> str:
         """Clear aaPanel error logs.
 
         Args:
             server: Server name (optional)
+            confirmed: Must be True to confirm this action
         """
         client = client_manager.get_client(server or None)
-        data = client.request("/config?action=clean_panel_error_logs")
+        data = client.request("/config?action=clean_panel_error_logs", confirmed=confirmed)
         return format_response(data)
 
     @mcp.tool()
-    def system_clear_site_logs(server: str = "", siteName: str = "") -> str:
+    def system_clear_site_logs(server: str = "", siteName: str = "", confirmed: bool = False) -> str:
         """Clear access/error logs for a specific site.
 
         Args:
             server: Server name (optional)
             siteName: Site domain name
+            confirmed: Must be True to confirm this action
         """
         client = client_manager.get_client(server or None)
         params = {"siteName": siteName}
-        data = client.request("/files?action=CloseLogs", params)
+        data = client.request("/files?action=CloseLogs", params, confirmed=confirmed)
         return format_response(data)
 
     @mcp.tool()
-    def system_clear_all_logs(server: str = "") -> str:
+    def system_clear_all_logs(server: str = "", confirmed: bool = False) -> str:
         """Close/clear all website logs on the server.
 
         Args:
             server: Server name (optional)
+            confirmed: Must be True to confirm this action
         """
         client = client_manager.get_client(server or None)
-        data = client.request("/files?action=CloseLogs")
+        data = client.request("/files?action=CloseLogs", confirmed=confirmed)
         return format_response(data)
 
     @mcp.tool()
-    def system_clear_old_sessions(server: str = "") -> str:
+    def system_clear_old_sessions(server: str = "", confirmed: bool = False) -> str:
         """Delete old panel sessions to free up resources.
 
         Args:
             server: Server name (optional)
+            confirmed: Must be True to confirm this destructive action
         """
         client = client_manager.get_client(server or None)
-        data = client.request("/config?action=DelOldSession")
+        data = client.request("/config?action=DelOldSession", confirmed=confirmed)
         return format_response(data)
 
     # ==================== Storage Management ====================
@@ -107,11 +115,12 @@ def register_optimization_tools(mcp: FastMCP) -> None:
 
         Args:
             server: Server name (optional)
-            start: Start timestamp
-            end: End timestamp
+            start: Start timestamp (defaults to 1 hour ago)
+            end: End timestamp (defaults to now)
         """
         client = client_manager.get_client(server or None)
-        params = {"start": start, "end": end}
+        now = int(time.time())
+        params = {"start": start or str(now - 3600), "end": end or str(now)}
         data = client.request("/ajax?action=GetDiskIo", params)
         return format_response(data)
 
@@ -203,58 +212,101 @@ def register_optimization_tools(mcp: FastMCP) -> None:
 
         Args:
             server: Server name (optional)
-            start: Start timestamp
-            end: End timestamp
+            start: Start timestamp (defaults to 1 hour ago)
+            end: End timestamp (defaults to now)
         """
         client = client_manager.get_client(server or None)
-        params = {"start": start, "end": end}
+        now = int(time.time())
+        params = {"start": start or str(now - 3600), "end": end or str(now)}
         data = client.request("/ajax?action=GetCpuIo", params)
         return format_response(data)
 
     @mcp.tool()
-    def cpu_get_process_tops(server: str = "") -> str:
+    def cpu_get_process_tops(
+        server: str = "",
+        start: str = "",
+        end: str = "",
+    ) -> str:
         """Get top processes by resource consumption (CPU/memory ranking).
 
         Args:
             server: Server name (optional)
+            start: Start timestamp (defaults to 1 hour ago)
+            end: End timestamp (defaults to now)
         """
         client = client_manager.get_client(server or None)
-        data = client.request("/ajax?action=get_process_tops")
+        now = int(time.time())
+        params = {"start": start or str(now - 3600), "end": end or str(now)}
+        data = client.request("/ajax?action=get_process_tops", params)
+        # Panel may return a raw string error ("error: no such table") when the
+        # process-metrics DB table doesn't exist yet — fall back to v2 monitor.
+        if (
+            is_missing_endpoint(data)
+            or (isinstance(data, str) and data.lower().startswith("error"))
+            or (isinstance(data, list) and not data)
+        ):
+            data = request_compat(
+                client,
+                ["/v2/monitor/process_management/specific_resource_load_type", "/ajax?action=GetProcessList"],
+            )
         return format_response(data)
 
     @mcp.tool()
-    def cpu_get_high_cpu_processes(server: str = "") -> str:
+    def cpu_get_high_cpu_processes(
+        server: str = "",
+        start: str = "",
+        end: str = "",
+    ) -> str:
         """Get list of processes with high CPU usage.
 
         Args:
             server: Server name (optional)
+            start: Start timestamp (defaults to 1 hour ago)
+            end: End timestamp (defaults to now)
         """
         client = client_manager.get_client(server or None)
-        data = client.request("/ajax?action=get_process_cpu_high")
+        now = int(time.time())
+        params = {"start": start or str(now - 3600), "end": end or str(now)}
+        data = client.request("/ajax?action=get_process_cpu_high", params)
+        # Panel may return a raw string error ("error: no such table") when the
+        # process-metrics DB table doesn't exist yet — fall back to v2 monitor.
+        if (
+            is_missing_endpoint(data)
+            or (isinstance(data, str) and data.lower().startswith("error"))
+            or (isinstance(data, list) and not data)
+        ):
+            data = request_compat(
+                client,
+                ["/v2/monitor/process_management/specific_resource_load_type", "/ajax?action=GetProcessList"],
+            )
         return format_response(data)
 
     @mcp.tool()
     def process_list(server: str = "") -> str:
-        """List all running processes with CPU and memory usage.
+        """List running processes with CPU and memory usage.
 
         Args:
             server: Server name (optional)
         """
         client = client_manager.get_client(server or None)
-        data = client.request("/ajax?action=GetProcessList")
+        data = request_compat(
+            client,
+            ["/v2/monitor/process_management/specific_resource_load_type", "/ajax?action=GetProcessList"],
+        )
         return format_response(data)
 
     @mcp.tool()
-    def process_kill(server: str = "", pid: str = "") -> str:
+    def process_kill(server: str = "", pid: str = "", confirmed: bool = False) -> str:
         """Kill a specific process by PID.
 
         Args:
             server: Server name (optional)
             pid: Process ID to kill
+            confirmed: Must be True to confirm this destructive action
         """
         client = client_manager.get_client(server or None)
         params = {"pid": pid}
-        data = client.request("/ajax?action=KillProcess", params)
+        data = client.request("/ajax?action=KillProcess", params, confirmed=confirmed)
         return format_response(data)
 
     @mcp.tool()
@@ -315,11 +367,12 @@ def register_optimization_tools(mcp: FastMCP) -> None:
 
         Args:
             server: Server name (optional)
-            start: Start timestamp
-            end: End timestamp
+            start: Start timestamp (defaults to 1 hour ago)
+            end: End timestamp (defaults to now)
         """
         client = client_manager.get_client(server or None)
-        params = {"start": start, "end": end}
+        now = int(time.time())
+        params = {"start": start or str(now - 3600), "end": end or str(now)}
         data = client.request("/ajax?action=GetNetWorkIo", params)
         return format_response(data)
 
@@ -353,10 +406,18 @@ def register_optimization_tools(mcp: FastMCP) -> None:
 
         Args:
             server: Server name (optional)
-            version: PHP version (e.g. 74, 80, 81, 82, 83)
+            version: PHP version (e.g. 74, 80, 81, 82, 83; auto-detected if omitted)
         """
         client = client_manager.get_client(server or None)
-        params = {"version": version}
+        resolved_ver = version
+        if not resolved_ver:
+            cfg = client.request("/config?action=get_config")
+            if isinstance(cfg, dict):
+                for php in cfg.get("php", []):
+                    if php.get("setup"):
+                        resolved_ver = str(php.get("version", ""))
+                        break
+        params = {"version": resolved_ver or "83"}
         data = client.request("/ajax?action=GetPHPStatus", params)
         return format_response(data)
 
@@ -379,7 +440,10 @@ def register_optimization_tools(mcp: FastMCP) -> None:
             server: Server name (optional)
         """
         client = client_manager.get_client(server or None)
-        data = client.request("/ajax?action=GetMemcachedStatus")
+        data = request_compat(
+            client,
+            ["/v2/ajax?action=GetMemcachedStatus", "/ajax?action=GetMemcachedStatus"],
+        )
         return format_response(data)
 
     @mcp.tool()
@@ -403,7 +467,7 @@ def register_optimization_tools(mcp: FastMCP) -> None:
             server: Server name (optional)
         """
         client = client_manager.get_client(server or None)
-        params = {"name": "btwaf", "fun": "index"}
+        params = {"name": "btwaf", "s": "get_config", "fun": "get_config"}
         data = client.request("/plugin?action=a", params)
         return format_response(data)
 
@@ -415,7 +479,7 @@ def register_optimization_tools(mcp: FastMCP) -> None:
             server: Server name (optional)
         """
         client = client_manager.get_client(server or None)
-        params = {"name": "btwaf", "fun": "get_sites"}
+        params = {"name": "btwaf", "s": "get_site_config", "fun": "get_site_config"}
         data = client.request("/plugin?action=a", params)
         return format_response(data)
 
@@ -433,7 +497,14 @@ def register_optimization_tools(mcp: FastMCP) -> None:
             status: 1=enable, 0=disable
         """
         client = client_manager.get_client(server or None)
-        params = {"name": "btwaf", "fun": "set_site_status", "siteName": siteName, "status": status}
+        params = {
+            "name": "btwaf",
+            "s": "set_site_obj_open",
+            "fun": "set_site_obj_open",
+            "siteName": siteName,
+            "obj": "open",
+            "status": status,
+        }
         data = client.request("/plugin?action=a", params)
         return format_response(data)
 
@@ -453,7 +524,14 @@ def register_optimization_tools(mcp: FastMCP) -> None:
             limit: Items per page (default 20)
         """
         client = client_manager.get_client(server or None)
-        params = {"name": "btwaf", "fun": "get_logs", "siteName": siteName, "p": page, "limit": limit}
+        params = {
+            "name": "btwaf",
+            "s": "get_logs_list",
+            "fun": "get_logs_list",
+            "siteName": siteName,
+            "p": page,
+            "limit": limit,
+        }
         data = client.request("/plugin?action=a", params)
         return format_response(data)
 
@@ -465,7 +543,7 @@ def register_optimization_tools(mcp: FastMCP) -> None:
             server: Server name (optional)
         """
         client = client_manager.get_client(server or None)
-        params = {"name": "btwaf", "fun": "get_rules"}
+        params = {"name": "btwaf", "s": "get_rule", "fun": "get_rule"}
         data = client.request("/plugin?action=a", params)
         return format_response(data)
 
@@ -485,7 +563,16 @@ def register_optimization_tools(mcp: FastMCP) -> None:
             ps: Remark/description
         """
         client = client_manager.get_client(server or None)
-        params = {"name": "btwaf", "fun": "add_rule", "type": rule_type, "value": rule_value, "ps": ps}
+        params = {
+            "name": "btwaf",
+            "s": "add_rule",
+            "fun": "add_rule",
+            "ruleName": rule_type,
+            "type": rule_type,
+            "ruleValue": rule_value,
+            "value": rule_value,
+            "ps": ps,
+        }
         data = client.request("/plugin?action=a", params)
         return format_response(data)
 
@@ -498,7 +585,7 @@ def register_optimization_tools(mcp: FastMCP) -> None:
             rule_id: Rule ID to delete
         """
         client = client_manager.get_client(server or None)
-        params = {"name": "btwaf", "fun": "del_rule", "id": rule_id}
+        params = {"name": "btwaf", "s": "remove_rule", "fun": "remove_rule", "id": rule_id}
         data = client.request("/plugin?action=a", params)
         return format_response(data)
 
@@ -506,46 +593,67 @@ def register_optimization_tools(mcp: FastMCP) -> None:
 
     @mcp.tool()
     def abnormal_check_mysql_server(server: str = "") -> str:
-        """Check MySQL server for abnormal configuration issues.
+        """Check MySQL server for abnormal configuration or status issues.
 
         Args:
             server: Server name (optional)
         """
         client = client_manager.get_client(server or None)
-        data = client.request("/abnormal?action=mysql_server")
+        data = {
+            "run_status": client.request("/database?action=GetRunStatus"),
+            "exceptions": client.request("/monitor?action=get_exception"),
+        }
         return format_response(data)
 
     @mcp.tool()
     def abnormal_check_mysql_cpu(server: str = "") -> str:
-        """Check MySQL CPU usage for abnormalities.
+        """Check MySQL CPU usage and slow queries for abnormalities.
 
         Args:
             server: Server name (optional)
         """
         client = client_manager.get_client(server or None)
-        data = client.request("/abnormal?action=mysql_cpu")
+        data = {
+            "exceptions": client.request("/monitor?action=get_exception"),
+            "process_load": request_compat(
+                client,
+                ["/v2/monitor/process_management/specific_resource_load_type", "/ajax?action=GetProcessList"],
+            ),
+        }
         return format_response(data)
 
     @mcp.tool()
     def abnormal_check_php_server(server: str = "") -> str:
-        """Check PHP-FPM for abnormal configuration.
+        """Check PHP-FPM for abnormal configuration or status issues.
 
         Args:
             server: Server name (optional)
         """
         client = client_manager.get_client(server or None)
-        data = client.request("/abnormal?action=php_server")
-        return format_response(data)
+        cfg = client.request("/config?action=get_config")
+        php_list = cfg.get("php", []) if isinstance(cfg, dict) else []
+        results = {"installed_php": php_list}
+        for php in php_list:
+            if php.get("setup"):
+                ver = str(php.get("version", ""))
+                results[f"php_{ver}_status"] = client.request("/ajax?action=GetPHPStatus", {"version": ver})
+        return format_response(results)
 
     @mcp.tool()
     def abnormal_check_php_cpu(server: str = "") -> str:
-        """Check PHP-FPM CPU usage for abnormalities.
+        """Check PHP-FPM CPU usage and slow logs for abnormalities.
 
         Args:
             server: Server name (optional)
         """
         client = client_manager.get_client(server or None)
-        data = client.request("/abnormal?action=php_cpu")
+        data = {
+            "exceptions": client.request("/monitor?action=get_exception"),
+            "process_load": request_compat(
+                client,
+                ["/v2/monitor/process_management/specific_resource_load_type", "/ajax?action=GetProcessList"],
+            ),
+        }
         return format_response(data)
 
     @mcp.tool()
@@ -556,7 +664,10 @@ def register_optimization_tools(mcp: FastMCP) -> None:
             server: Server name (optional)
         """
         client = client_manager.get_client(server or None)
-        data = client.request("/abnormal?action=CPU")
+        data = request_compat(
+            client,
+            ["/v2/monitor/process_management/specific_resource_load_type", "/ajax?action=GetProcessList"],
+        )
         return format_response(data)
 
     @mcp.tool()
@@ -567,7 +678,13 @@ def register_optimization_tools(mcp: FastMCP) -> None:
             server: Server name (optional)
         """
         client = client_manager.get_client(server or None)
-        data = client.request("/abnormal?action=Memory")
+        data = {
+            "memory": client.request("/system?action=GetMemInfo"),
+            "process_load": request_compat(
+                client,
+                ["/v2/monitor/process_management/specific_resource_load_type", "/ajax?action=GetProcessList"],
+            ),
+        }
         return format_response(data)
 
     @mcp.tool()
@@ -578,7 +695,7 @@ def register_optimization_tools(mcp: FastMCP) -> None:
             server: Server name (optional)
         """
         client = client_manager.get_client(server or None)
-        data = client.request("/abnormal?action=disk")
+        data = client.request("/system?action=GetDiskInfo")
         return format_response(data)
 
     @mcp.tool()
@@ -589,7 +706,15 @@ def register_optimization_tools(mcp: FastMCP) -> None:
             server: Server name (optional)
         """
         client = client_manager.get_client(server or None)
-        data = client.request("/abnormal?action=start")
+        data = {
+            "system_total": client.request("/system?action=GetSystemTotal"),
+            "disk": client.request("/system?action=GetDiskInfo"),
+            "exceptions": client.request("/monitor?action=get_exception"),
+            "process_load": request_compat(
+                client,
+                ["/v2/monitor/process_management/specific_resource_load_type", "/ajax?action=GetProcessList"],
+            ),
+        }
         return format_response(data)
 
     # ==================== Security Baseline ====================
@@ -602,7 +727,10 @@ def register_optimization_tools(mcp: FastMCP) -> None:
             server: Server name (optional)
         """
         client = client_manager.get_client(server or None)
-        data = client.request("/san?action=start")
+        data = request_compat(
+            client,
+            ["/v2/safe/serversafe/get_security_info", "/san?action=start"],
+        )
         return format_response(data)
 
     @mcp.tool()
@@ -613,7 +741,13 @@ def register_optimization_tools(mcp: FastMCP) -> None:
             server: Server name (optional)
         """
         client = client_manager.get_client(server or None)
-        data = client.request("/san?action=get_resut")
+        data = {
+            "server_safe": request_compat(
+                client,
+                ["/v2/safe/serversafe/get_security_info", "/san?action=get_resut"],
+            ),
+            "ssh_baseline": client.request("/ssh_security?action=san_ssh_security"),
+        }
         return format_response(data)
 
     @mcp.tool()
@@ -622,11 +756,13 @@ def register_optimization_tools(mcp: FastMCP) -> None:
 
         Args:
             server: Server name (optional)
-            item: Issue item to repair
+            item: Issue ID or item name to repair
         """
         client = client_manager.get_client(server or None)
-        params = {"item": item}
-        data = client.request("/san?action=repair", params)
+        if item.isdigit():
+            data = client.request("/san?action=repair", {"id": item, "item": item})
+        else:
+            data = client.request("/v2/safe/serversafe/repair_security", {"name": item, "args": "{}"})
         return format_response(data)
 
     @mcp.tool()
@@ -648,10 +784,18 @@ def register_optimization_tools(mcp: FastMCP) -> None:
 
         Args:
             server: Server name (optional)
-            version: PHP version (e.g. 74, 80, 81, 82, 83)
+            version: PHP version (e.g. 74, 80, 81, 82, 83; auto-detected if omitted)
         """
         client = client_manager.get_client(server or None)
-        params = {"version": version}
+        resolved_ver = version
+        if not resolved_ver:
+            cfg = client.request("/config?action=get_config")
+            if isinstance(cfg, dict):
+                for php in cfg.get("php", []):
+                    if php.get("setup"):
+                        resolved_ver = str(php.get("version", ""))
+                        break
+        params = {"version": resolved_ver or "83"}
         data = client.request("/ajax?action=GetPHPConfig", params)
         return format_response(data)
 
@@ -669,8 +813,15 @@ def register_optimization_tools(mcp: FastMCP) -> None:
             config: Configuration data (JSON string with key-value pairs)
         """
         client = client_manager.get_client(server or None)
-        params = {"version": version, "config": config}
-        data = client.request("/ajax?action=SetPHPConfig", params)
+        params = {"version": version}
+        if config:
+            try:
+                parsed = json.loads(config)
+                if isinstance(parsed, dict):
+                    params.update(parsed)
+            except Exception:
+                params["config"] = config
+        data = client.request("/config?action=SetPHPConf", params)
         return format_response(data)
 
     @mcp.tool()
@@ -679,10 +830,18 @@ def register_optimization_tools(mcp: FastMCP) -> None:
 
         Args:
             server: Server name (optional)
-            version: PHP version
+            version: PHP version (auto-detected if omitted)
         """
         client = client_manager.get_client(server or None)
-        params = {"version": version}
+        resolved_ver = version
+        if not resolved_ver:
+            cfg = client.request("/config?action=get_config")
+            if isinstance(cfg, dict):
+                for php in cfg.get("php", []):
+                    if php.get("setup"):
+                        resolved_ver = str(php.get("version", ""))
+                        break
+        params = {"version": resolved_ver or "83"}
         data = client.request("/config?action=getFpmConfig", params)
         return format_response(data)
 
@@ -697,10 +856,23 @@ def register_optimization_tools(mcp: FastMCP) -> None:
         Args:
             server: Server name (optional)
             version: PHP version
-            config: FPM config data (JSON string)
+            config: FPM config data (JSON string with max_children, start_servers, min_spare_servers, max_spare_servers, pm)
         """
         client = client_manager.get_client(server or None)
-        params = {"version": version, "config": config}
+        current = client.request("/config?action=getFpmConfig", {"version": version})
+        params = {"version": version, "listen": "unix"}
+        if isinstance(current, dict):
+            for k in ("max_children", "start_servers", "min_spare_servers", "max_spare_servers", "pm"):
+                if k in current:
+                    params[k] = str(current[k])
+        if config:
+            try:
+                parsed = json.loads(config)
+                if isinstance(parsed, dict):
+                    for k, v in parsed.items():
+                        params[k] = str(v)
+            except Exception:
+                params["config"] = config
         data = client.request("/config?action=setFpmConfig", params)
         return format_response(data)
 
@@ -715,10 +887,11 @@ def register_optimization_tools(mcp: FastMCP) -> None:
         Args:
             server: Server name (optional)
             version: PHP version
-            max_size: Max upload size (e.g. 50M, 100M)
+            max_size: Max upload size in MB (e.g. 50 or 50M)
         """
         client = client_manager.get_client(server or None)
-        params = {"version": version, "max_size": max_size}
+        clean_max = max_size.rstrip("MmBbGgKk ")
+        params = {"version": version, "max": clean_max, "max_size": clean_max}
         data = client.request("/config?action=setPHPMaxSize", params)
         return format_response(data)
 
@@ -736,7 +909,7 @@ def register_optimization_tools(mcp: FastMCP) -> None:
             max_time: Max execution time in seconds (e.g. 120, 300)
         """
         client = client_manager.get_client(server or None)
-        params = {"version": version, "max_time": max_time}
+        params = {"version": version, "time": max_time, "max_time": max_time}
         data = client.request("/config?action=setPHPMaxTime", params)
         return format_response(data)
 
@@ -762,7 +935,18 @@ def register_optimization_tools(mcp: FastMCP) -> None:
             config: Nginx config data (JSON string with key-value pairs)
         """
         client = client_manager.get_client(server or None)
-        params = {"config": config}
+        params = {}
+        if config:
+            try:
+                parsed = json.loads(config)
+                if isinstance(parsed, dict):
+                    params.update(parsed)
+                elif isinstance(parsed, list):
+                    for item in parsed:
+                        if isinstance(item, dict) and "name" in item and "value" in item:
+                            params[item["name"]] = item["value"]
+            except Exception:
+                params["config"] = config
         data = client.request("/config?action=SetNginxValue", params)
         return format_response(data)
 
@@ -786,7 +970,18 @@ def register_optimization_tools(mcp: FastMCP) -> None:
             config: Apache config data (JSON string)
         """
         client = client_manager.get_client(server or None)
-        params = {"config": config}
+        params = {}
+        if config:
+            try:
+                parsed = json.loads(config)
+                if isinstance(parsed, dict):
+                    params.update(parsed)
+                elif isinstance(parsed, list):
+                    for item in parsed:
+                        if isinstance(item, dict) and "name" in item and "value" in item:
+                            params[item["name"]] = item["value"]
+            except Exception:
+                params["config"] = config
         data = client.request("/config?action=SetApacheValue", params)
         return format_response(data)
 
@@ -822,7 +1017,10 @@ def register_optimization_tools(mcp: FastMCP) -> None:
             server: Server name (optional)
         """
         client = client_manager.get_client(server or None)
-        data = client.request("/system?action=UpdatePanel")
+        data = request_compat(
+            client,
+            ["/ajax?action=UpdatePanel", "/system?action=UpdatePanel"],
+        )
         return format_response(data)
 
     @mcp.tool()
@@ -833,7 +1031,10 @@ def register_optimization_tools(mcp: FastMCP) -> None:
             server: Server name (optional)
         """
         client = client_manager.get_client(server or None)
-        data = client.request("/config?action=get_settings")
+        data = request_compat(
+            client,
+            ["/ajax?action=CheckInstalled", "/config?action=get_settings"],
+        )
         return format_response(data)
 
     @mcp.tool()
@@ -844,7 +1045,10 @@ def register_optimization_tools(mcp: FastMCP) -> None:
             server: Server name (optional)
         """
         client = client_manager.get_client(server or None)
-        data = client.request("/config?action=get_settings")
+        data = request_compat(
+            client,
+            ["/ajax?action=GetInstalled", "/config?action=get_settings"],
+        )
         return format_response(data)
 
     @mcp.tool()
@@ -855,7 +1059,11 @@ def register_optimization_tools(mcp: FastMCP) -> None:
             server: Server name (optional)
         """
         client = client_manager.get_client(server or None)
-        data = client.request("/system?action=GetSoftList")
+        data = request_compat(
+            client,
+            ["/plugin?action=get_soft_list", "/system?action=GetSoftList"],
+            {"type": "0", "query": "", "p": 1, "row": 50, "force": 0},
+        )
         return format_response(data)
 
     # ==================== Software Install/Uninstall via Files API ====================
@@ -870,20 +1078,21 @@ def register_optimization_tools(mcp: FastMCP) -> None:
             version: Version to install
         """
         client = client_manager.get_client(server or None)
-        params = {"name": name, "version": version}
+        params = {"name": name, "version": version, "type": "0"}
         data = client.request("/files?action=InstallSoft", params)
         return format_response(data)
 
     @mcp.tool()
-    def soft_uninstall(server: str = "", name: str = "", version: str = "") -> str:
+    def soft_uninstall(server: str = "", name: str = "", version: str = "", confirmed: bool = False) -> str:
         """Uninstall a software component.
 
         Args:
             server: Server name (optional)
             name: Software name
             version: Version to uninstall
+            confirmed: Must be True to confirm this destructive action
         """
         client = client_manager.get_client(server or None)
         params = {"name": name, "version": version}
-        data = client.request("/files?action=UninstallSoft", params)
+        data = client.request("/files?action=UninstallSoft", params, confirmed=confirmed)
         return format_response(data)

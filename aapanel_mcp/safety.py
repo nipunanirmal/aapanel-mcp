@@ -54,8 +54,16 @@ DESTRUCTIVE_ACTIONS = {
     "del_file_deny",
     # Session
     "DelOldSession",
-    # Docker (path-style endpoints: /panel/docker/<action>)
-    "stop", "delete_image", "del_network", "remove",
+    # Docker (path-style endpoints: /panel/docker/<action> or /v2/btdocker/<mod>/<action>)
+    "stop", "delete_image", "del_network", "remove", "del_container",
+    # Docker (query-style)
+    "StopContainer", "DeleteImage", "DeleteVolume", "DeleteNetwork",
+    # Projects
+    "del_project", "DelProject", "del_proxy", "remove_project", "RemoveProject", "delete",
+    # SSL v2
+    "remove_cert",
+    # Plugins
+    "uninstall_plugin",
 }
 
 # Actions that are moderately destructive (clear/reset but not delete)
@@ -133,10 +141,10 @@ def extract_action(endpoint: str) -> Optional[str]:
     if match:
         return match.group(1)
     
-    # Try path-style: /panel/docker/<def_name>
+    # Try path-style: /panel/docker/<def_name>, /v2/btdocker/<mod>/<def_name>, /v2/project/<mod>/<def_name>, /v2/mod/<name>/<sub>/<def_name>
     # Extract the last path segment as the action
     parts = endpoint.split('?')[0].strip('/').split('/')
-    if len(parts) >= 3 and parts[0] == 'panel':
+    if len(parts) >= 3 and parts[0] in ('panel', 'project', 'mod', 'safe', 'v2'):
         return parts[-1]
     
     return None

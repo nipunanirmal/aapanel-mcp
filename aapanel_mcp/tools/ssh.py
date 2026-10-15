@@ -2,7 +2,7 @@
 
 from mcp.server.fastmcp import FastMCP
 from ..client import client_manager
-from ..utils import format_response
+from ..utils import format_response, request_compat
 
 
 def register_ssh_tools(mcp: FastMCP) -> None:
@@ -16,7 +16,10 @@ def register_ssh_tools(mcp: FastMCP) -> None:
             server: Server name (optional)
         """
         client = client_manager.get_client(server or None)
-        data = client.request("/firewall?action=GetSshInfo")
+        data = request_compat(
+            client,
+            ["/v2/safe/ssh/GetSshInfo", "/firewall?action=GetSshInfo"],
+        )
         return format_response(data)
 
     @mcp.tool()
@@ -35,13 +38,18 @@ def register_ssh_tools(mcp: FastMCP) -> None:
             root_login: 1=allow root login, 0=disable
         """
         client = client_manager.get_client(server or None)
-        params = {
-            "port": port,
-            "password_auth": password_auth,
-            "root_login": root_login,
-        }
-        data = client.request("/firewall?action=SetSshPort", params)
-        return format_response(data)
+        results = {}
+        if port:
+            results["port"] = client.request("/firewall?action=SetSshPort", {"port": port})
+        if str(password_auth) in ("1", "true", "True", "yes"):
+            results["password_auth"] = client.request("/ssh_security?action=set_password")
+        elif str(password_auth) in ("0", "false", "False", "no"):
+            results["password_auth"] = client.request("/ssh_security?action=stop_password", confirmed=True)
+        if str(root_login) in ("1", "true", "True", "yes"):
+            results["root_login"] = client.request("/ssh_security?action=set_root", {"p_type": "yes"})
+        elif str(root_login) in ("0", "false", "False", "no"):
+            results["root_login"] = client.request("/ssh_security?action=stop_root", confirmed=True)
+        return format_response(results)
 
     @mcp.tool()
     def ssh_get_logs(
@@ -59,10 +67,12 @@ def register_ssh_tools(mcp: FastMCP) -> None:
             search: Search keyword (IP or username)
         """
         client = client_manager.get_client(server or None)
-        params = {"table": "logs", "p": page, "limit": limit}
-        if search:
-            params["search"] = search
-        data = client.request("/data?action=getData", params)
+        params = {"p": page, "page": page, "limit": limit, "search": search, "select": "ALL", "table": "logs"}
+        data = request_compat(
+            client,
+            ["/v2/mod/ssh/com/get_ssh_list", "/data?action=getData"],
+            params,
+        )
         return format_response(data)
 
     @mcp.tool()
@@ -73,5 +83,8 @@ def register_ssh_tools(mcp: FastMCP) -> None:
             server: Server name (optional)
         """
         client = client_manager.get_client(server or None)
-        data = client.request("/firewall?action=GetSshInfo")
+        data = request_compat(
+            client,
+            ["/ssh_security?action=san_ssh_security", "/firewall?action=GetSshInfo"],
+        )
         return format_response(data)

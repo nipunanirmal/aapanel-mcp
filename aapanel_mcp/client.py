@@ -1,5 +1,6 @@
 """aaPanel API client with authentication and request handling."""
 
+import base64
 import hashlib
 import time
 import logging
@@ -84,7 +85,7 @@ class aaPanelClient:
 
         signed_params = sign_request(self.config.token, params)
 
-        max_retries = 2
+        max_retries = 1
         last_error = None
 
         for attempt in range(max_retries + 1):
@@ -140,6 +141,65 @@ class aaPanelClient:
             "endpoint": endpoint,
             "error_type": type(last_error).__name__ if last_error else "Unknown",
         }
+
+    def request_upload(
+        self,
+        endpoint: str,
+        params: Optional[dict] = None,
+        filename: str = "",
+        file_content: bytes = b"",
+        confirmed: bool = False,
+    ) -> dict | list:
+        """Send a multipart file upload request to aaPanel.
+
+        Args:
+            endpoint: API path (e.g. "/files?action=UploadFile")
+            params: Form parameters (path, filename, etc.) — will be signed
+            filename: Name of the file being uploaded
+            file_content: Raw bytes of the file content
+            confirmed: Must be True for destructive operations
+
+        Returns:
+            Parsed JSON response
+        """
+        if params is None:
+            params = {}
+
+        is_safe, message = check_request_safety(endpoint, params, confirmed)
+        if not is_safe:
+            if message.startswith("BLOCKED"):
+                return {"status": False, "msg": message, "blocked_by_safety": True}
+            else:
+                return {"status": False, "msg": message, "confirmation_required": True}
+
+        signed_params = sign_request(self.config.token, params)
+
+        try:
+            response = self._client.post(
+                endpoint,
+                data=signed_params,
+                files={
+                    "file": (filename, file_content, "application/octet-stream"),
+                },
+            )
+            response.raise_for_status()
+            return response.json()
+        except httpx.HTTPStatusError as e:
+            logger.warning("HTTP %d on %s: %s", e.response.status_code, endpoint, e)
+            return {
+                "status": False,
+                "msg": f"HTTP {e.response.status_code}: {e}",
+                "endpoint": endpoint,
+                "error_type": "HTTPStatusError",
+            }
+        except Exception as e:
+            logger.warning("Upload error on %s: %s", endpoint, e)
+            return {
+                "status": False,
+                "msg": f"Upload failed: {e}",
+                "endpoint": endpoint,
+                "error_type": type(e).__name__,
+            }
 
     def install_plugin_from_release(
         self,

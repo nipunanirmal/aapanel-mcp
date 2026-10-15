@@ -24,7 +24,10 @@ def register_backup_tools(mcp: FastMCP) -> None:
             limit: Items per page (default 100)
         """
         client = client_manager.get_client(server or None)
+        type_map = {"site": "0", "database": "1", "path": "2"}
         params = {"table": "backup", "p": page, "limit": limit}
+        if type in type_map:
+            params["type"] = type_map[type]
         data = client.request("/data?action=getData", params)
         return format_response(data)
 
@@ -41,24 +44,31 @@ def register_backup_tools(mcp: FastMCP) -> None:
             server: Server name (optional)
             type: Backup type (site, database, path)
             id: Target ID (site ID or database ID)
-            name: Target name
+            name: Target name (or directory path for path backup)
         """
         client = client_manager.get_client(server or None)
-        params = {"type": type, "id": id, "name": name}
-        data = client.request("/backup?action=ToBackup", params)
-        return format_response(data)
+        if type == "database":
+            if id:
+                return format_response(client.request("/database?action=ToBackup", {"id": id}))
+            return format_response(client.request("/bak?action=backup_database", {"name": name}))
+        if type == "path":
+            return format_response(client.request("/bak?action=backup_path", {"path": name or id}))
+        if id:
+            return format_response(client.request("/site?action=ToBackup", {"id": id}))
+        return format_response(client.request("/bak?action=backup_site", {"name": name}))
 
     @mcp.tool()
-    def backup_delete(server: str = "", id: str = "") -> str:
+    def backup_delete(server: str = "", id: str = "", confirmed: bool = False) -> str:
         """Delete a backup.
 
         Args:
             server: Server name (optional)
             id: Backup ID
+            confirmed: Must be True to confirm this destructive action
         """
         client = client_manager.get_client(server or None)
         params = {"id": id}
-        data = client.request("/backup?action=DelBackup", params)
+        data = client.request("/site?action=DelBackup", params, confirmed=confirmed)
         return format_response(data)
 
     @mcp.tool()
@@ -81,19 +91,20 @@ def register_backup_tools(mcp: FastMCP) -> None:
             id: Task ID
         """
         client = client_manager.get_client(server or None)
-        params = {"id": id}
-        data = client.request("/task?action=get_task_find", params)
+        params = {"table": "tasks", "id": id}
+        data = client.request("/data?action=getFind", params)
         return format_response(data)
 
     @mcp.tool()
-    def task_remove(server: str = "", id: str = "") -> str:
+    def task_remove(server: str = "", id: str = "", confirmed: bool = False) -> str:
         """Remove/cancel a background task.
 
         Args:
             server: Server name (optional)
             id: Task ID
+            confirmed: Must be True to confirm this destructive action
         """
         client = client_manager.get_client(server or None)
         params = {"id": id}
-        data = client.request("/task?action=remove_task", params)
+        data = client.request("/task?action=remove_task", params, confirmed=confirmed)
         return format_response(data)

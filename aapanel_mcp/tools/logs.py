@@ -40,7 +40,7 @@ def register_log_tools(mcp: FastMCP) -> None:
             limit: Items per page (default 20)
         """
         client = client_manager.get_client(server or None)
-        params = {"page": page, "limit": limit}
+        params = {"p": page, "page": page, "limit": limit}
         data = client.request("/ssh_security?action=get_logs", params)
         return format_response(data)
 
@@ -124,6 +124,6 @@ def register_log_tools(mcp: FastMCP) -> None:
             server: Server name (optional)
         """
         client = client_manager.get_client(server or None)
-        params = {"path": "/www/server/panel/data/error.log"}
+        params = {"path": "/www/server/panel/logs/error.log"}
         data = client.request("/files?action=GetFileBody", params)
         return format_response(data)

@@ -83,16 +83,17 @@ def register_crontab_tools(mcp: FastMCP) -> None:
         return format_response(data)
 
     @mcp.tool()
-    def crontab_delete(server: str = "", id: str = "") -> str:
+    def crontab_delete(server: str = "", id: str = "", confirmed: bool = False) -> str:
         """Delete a cron job.
 
         Args:
             server: Server name (optional)
             id: Cron job ID
+            confirmed: Must be True to confirm this destructive action
         """
         client = client_manager.get_client(server or None)
         params = {"id": id}
-        data = client.request("/crontab?action=DelCrontab", params)
+        data = client.request("/crontab?action=DelCrontab", params, confirmed=confirmed)
         return format_response(data)
 
     @mcp.tool()
@@ -176,6 +177,6 @@ def register_crontab_tools(mcp: FastMCP) -> None:
             search: Search keyword (optional)
         """
         client = client_manager.get_client(server or None)
-        params = {"id": id, "search": search}
+        params = {"cron_id": id, "id": id, "search": search, "p": 1, "rows": 20}
         data = client.request("/crontab?action=get_backup_list", params)
         return format_response(data)

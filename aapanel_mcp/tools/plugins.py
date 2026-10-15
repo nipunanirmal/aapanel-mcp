@@ -1,8 +1,7 @@
 """Plugin/software management tools for aaPanel MCP server."""
-
 from mcp.server.fastmcp import FastMCP
 from ..client import client_manager
-from ..utils import format_response
+from ..utils import format_response, request_compat
 
 
 def register_plugin_tools(mcp: FastMCP) -> None:
@@ -45,17 +44,18 @@ def register_plugin_tools(mcp: FastMCP) -> None:
         return format_response(data)
 
     @mcp.tool()
-    def plugin_uninstall(server: str = "", sName: str = "", version: str = "") -> str:
+    def plugin_uninstall(server: str = "", sName: str = "", version: str = "", confirmed: bool = False) -> str:
         """Uninstall a software/plugin.
 
         Args:
             server: Server name (optional)
             sName: Software name
             version: Version to uninstall
+            confirmed: Must be True to confirm this destructive action
         """
         client = client_manager.get_client(server or None)
         params = {"sName": sName, "version": version}
-        data = client.request("/plugin?action=uninstall_plugin", params)
+        data = client.request("/plugin?action=uninstall_plugin", params, confirmed=confirmed)
         return format_response(data)
 
     @mcp.tool()
@@ -79,7 +79,11 @@ def register_plugin_tools(mcp: FastMCP) -> None:
             server: Server name (optional)
         """
         client = client_manager.get_client(server or None)
-        data = client.request("/plugin?action=getPluginList")
+        data = request_compat(
+            client,
+            ["/plugin?action=get_soft_list", "/plugin?action=getPluginList"],
+            {"type": "-1", "query": "", "p": 1, "row": 100, "force": 0},
+        )
         return format_response(data)
 
     @mcp.tool()
@@ -87,6 +91,7 @@ def register_plugin_tools(mcp: FastMCP) -> None:
         server: str = "",
         sName: str = "",
         status: str = "1",
+        version: str = "",
     ) -> str:
         """Enable or disable a plugin.
 
@@ -94,9 +99,10 @@ def register_plugin_tools(mcp: FastMCP) -> None:
             server: Server name (optional)
             sName: Plugin name
             status: 1=enable, 0=disable
+            version: Optional version (required for php)
         """
         client = client_manager.get_client(server or None)
-        params = {"sName": sName, "status": status}
+        params = {"name": sName, "sName": sName, "status": status, "version": version}
         data = client.request("/plugin?action=setPluginStatus", params)
         return format_response(data)
 
@@ -109,8 +115,10 @@ def register_plugin_tools(mcp: FastMCP) -> None:
             sName: Plugin name
         """
         client = client_manager.get_client(server or None)
-        params = {"sName": sName}
+        params = {"name": sName, "sName": sName}
         data = client.request("/plugin?action=getPluginInfo", params)
+        if data is False:
+            data = client.request("/plugin?action=get_soft_find", {"sName": sName})
         return format_response(data)
 
     @mcp.tool()
@@ -124,9 +132,9 @@ def register_plugin_tools(mcp: FastMCP) -> None:
         Args:
             server: Server name (optional)
             sName: Plugin name
-            config: Configuration data (JSON string)
+            config: Configuration data (JSON string or newline-separated args)
         """
         client = client_manager.get_client(server or None)
-        params = {"sName": sName, "config": config}
+        params = {"name": sName, "sName": sName, "args_names": config, "config": config}
         data = client.request("/plugin?action=set_make_args", params)
         return format_response(data)
